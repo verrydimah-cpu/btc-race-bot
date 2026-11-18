@@ -21,7 +21,7 @@ single pattern with room to pay for itself, and otherwise holds cash.
 3. **Base.** At least 90 bars must pass after the washout begins, so
    the entry is never the first bounce off a falling knife.
 4. **Turn (the entry).** The close breaks the highest high of the
-   last 30 bars, the trailing hour is up at least 0.25%, and the
+   last 30 bars, the trailing hour is up at least 0.20%, and the
    close is still within 1.5% of the 480-bar low - the turn out of
    the base, not a chase after the recovery has already run.
 
@@ -31,7 +31,7 @@ single pattern with room to pay for itself, and otherwise holds cash.
   last 120 bars.
 - **Hard stop:** 1.2% under the position's average cost.
 - **Profit trail:** once the best close since entry is at least 0.8%
-  above the entry, a close 0.4% under that peak sells. (A plain ATR
+  above the entry, a close 0.25% under that peak sells. (A plain ATR
   trailing stop was tried first and strangled every trade in 1-minute
   noise; the trail only exists to protect a real gain.)
 - **Time stop:** 600 bars. After any exit the bot disarms and needs
@@ -57,9 +57,9 @@ priority; on any window where it traded, the fallback never fires.
 
 ## Dev-window result (local grade, exact harness fill model)
 
-- Full 1,440 bars: **net PnL +10.53 USDC (+1.05%)**, 1 round trip
-  (2 filled orders), maximum drawdown 0.80%.
-- First half alone: +10.53 USDC (the same trade).
+- Full 1,440 bars: **net PnL +12.50 USDC (+1.25%)**, 1 round trip
+  (2 filled orders), maximum drawdown 0.74%.
+- First half alone: +12.50 USDC (the same trade).
 - Second half alone: no trade, 0.00 USDC. That half is a slow bleed
   with no capitulation-and-base in it; every active variant tested
   lost money there, so the bot deliberately stays in cash. The dev
@@ -67,11 +67,31 @@ priority; on any window where it traded, the fallback never fires.
 - Two runs produce byte-identical replies (no clock, no environment,
   no randomness anywhere in the decision path).
 
+## v2 tuning (two parameters, validated)
+
+After v1 was graded, a two-parameter refinement was tested against
+the same exact fill model and adopted because it dominates v1 on
+every dev metric:
+
+- `MOM_MIN` 0.0025 -> 0.002: the entry momentum gate is slightly
+  looser, so the washout entry fires one bar earlier at a better
+  fill.
+- `TRAIL_PCT` 0.004 -> 0.0025: once the profit trail arms, it exits
+  closer under the peak close, keeping more of the move.
+
+Dev result moves from +10.53 USDC / 0.80% max drawdown (v1) to
+**+12.50 USDC / 0.74%** (v2), from the same single round trip.
+Perturbing either changed parameter by ±20% (and both together)
+keeps the dev PnL above the v1 result, so the pair sits on the
+same kind of plateau as the rest of the design rather than on a
+knife-edge fit.
+
 ## Why this should travel to an unseen window
 
 The parameters are few and sit on plateaus: moving any single one of
 the washout depth, breakout lookback, momentum gate or depth check
-by ±20% leaves the dev result unchanged or nearly so, because the
+by ±20% leaves the dev result unchanged or nearly so (the two v2
+parameters included - see the tuning note above), because the
 gates describe an event (a real capitulation that based and turned),
 not a tuned curve fit. On a window that trends up from the open the
 bot makes its one fallback trade; on a window that falls and keeps
