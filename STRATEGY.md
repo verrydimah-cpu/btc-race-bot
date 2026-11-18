@@ -37,6 +37,12 @@ single pattern with room to pay for itself, and otherwise holds cash.
   late on purpose - the first bounce inside a base routinely runs a
   percent or so and dips again, and a trail armed on that bounce
   shakes the position out before the real turn.)
+- **Armed-phase fuse:** once the trail has armed, the position is
+  banked 7 bars later unless another exit fires first. A move that
+  has run 1.6% in a handful of one-minute bars has usually spent
+  itself, and waiting for a close to fall the full trail distance
+  under the peak hands back a quarter of the gain before the exit
+  even fills.
 - **Time stop:** 600 bars. After any exit the bot disarms and needs
   a fresh washout.
 
@@ -60,9 +66,9 @@ priority; on any window where it traded, the fallback never fires.
 
 ## Dev-window result (local grade, exact harness fill model)
 
-- Full 1,440 bars: **net PnL +16.48 USDC (+1.65%)**, 1 round trip
+- Full 1,440 bars: **net PnL +19.23 USDC (+1.92%)**, 1 round trip
   (2 filled orders), maximum drawdown 0.65%.
-- First half alone: +16.48 USDC (the same trade).
+- First half alone: +19.23 USDC (the same trade).
 - Second half alone: no trade, 0.00 USDC. That half is a slow bleed
   with no capitulation-and-base in it; every active variant tested
   lost money there, so the bot deliberately stays in cash. The dev
@@ -125,12 +131,48 @@ unseen window it will also fire on some weaker bases that v2
 would have skipped - the 1.2% hard stop and the depth gate are
 what bound that cost, at about 1.5% of equity per failed trade.
 
+## v4 tuning (one new parameter, validated)
+
+A final pass worked only on the exit side - the v3 entry is
+untouched - and asked how much of the remaining gap between the
+trail's exit fill and the hold's peak close (about 0.4% on dev)
+could be kept. The trail's wait for a close 0.25% under the peak
+costs about 0.28% of it; fills themselves cost about 0.12% in
+slippage and impact, which no exit rule can avoid. The alternatives
+were tested against the same fill model:
+
+- Tighter trails (0.08%-0.12%) exit a bar or two sooner but fill
+  on worse opens after the top: +17.87 at best. A fixed
+  take-profit threshold is a cliff - the dev peak sits at +2.10%
+  over the average cost, so a threshold a hair under it fires at
+  the peak bar and a hair over it never fires at all.
+- Structure and stall exits after arming land at +16.29 to
+  +18.04; looser trails only lose, because the price never
+  recovers after the dev top.
+- What works is a short fuse on the armed phase: `ARM_T = 7`
+  banks the position 7 bars after the trail arms. On dev the
+  armed phase is a clean staircase to the peak, and the fuse
+  fills one bar after the peak close instead of four.
+
+Dev result moves from +16.48 USDC (v3) to **+19.23 USDC** (v4),
+the same single round trip, maximum drawdown unchanged at
+0.65%. The fuse length sits on a plateau, not a spike:
+perturbing `ARM_T` by ±20% (5.6 / 8.4 bars) keeps the dev PnL
+at +18.57 / +18.04, and every whole-bar length from 5.6 to 9
+stays above +17.87 - the dev top is a multi-bar plateau, so any
+short fuse banks nearly the same price. The honest caveat: on
+an unseen window the fuse will sometimes bank a move that
+would have run further, and the trail only gets its say when a
+reversal is fast enough to trigger inside the 7 bars. That is
+the accepted price of not paying the trail's give-back on
+every completed move.
+
 ## Why this should travel to an unseen window
 
 The parameters sit on plateaus rather than spikes: moving any
 single parameter of the design by ±20% leaves the dev result
 unchanged or keeps it above the previous version's result (the
-v2 and v3 tuning notes above give the numbers), because the
+v2, v3 and v4 tuning notes above give the numbers), because the
 gates describe an event (a real capitulation that based and
 turned), not a tuned curve fit. On a window that trends up from the open the
 bot makes its one fallback trade; on a window that falls and keeps

@@ -19,12 +19,19 @@ a capitulation that has stopped falling and turned.
   - Exit: the close breaks the lowest low of the last EXIT_L bars
     (the base/trend structure is gone), a hard stop STOP_PCT under
     the entry, a profit trail that arms only after a real gain (peak
-    TRAIL_ARM above the entry, then out TRAIL_PCT under the peak), or
-    a time stop. TRAIL_ARM is deliberately high (v3): the first
+    TRAIL_ARM above the entry, then out TRAIL_PCT under the peak), an
+    armed-phase fuse that banks the position ARM_T bars after the
+    trail arms, or a time stop. TRAIL_ARM is deliberately high (v3): the first
     bounce inside a base routinely runs a percent or so and then
     dips again, and a trail armed on that bounce shakes the position
     out before the real turn; arming only once the reversal has
-    proven itself keeps the trade on for the move that pays. After any exit the bot disarms: a fresh washout must
+    proven itself keeps the trade on for the move that pays. The
+    fuse is the counterpart on the way out: once a move has run
+    TRAIL_ARM in a handful of one-minute bars it has usually spent
+    itself, and waiting for a close to fall TRAIL_PCT under the
+    peak hands back a quarter of the gain, so the position is
+    banked ARM_T bars after arming unless another exit fires
+    first. After any exit the bot disarms: a fresh washout must
     arm it again.
 
 Position size scales down as volatility rises (ATR / close). Outside
@@ -69,6 +76,7 @@ VOL_TARGET = 0.0012      # per-bar ATR/close the sizing aims at (v3: was 0.0008)
 MIN_FRAC = 0.35          # never size below this share of equity
 TRAIL_ARM = 0.016        # profit trail arms this far above the entry (v3: was 0.008)
 TRAIL_PCT = 0.0025       # exits this far under the peak close (v2: was 0.004)
+ARM_T = 7                # bars after the trail arms before the position is banked (v4)
 STOP_PCT = 0.012         # hard stop: 1.2% under the entry price
 TIME_STOP = 600          # bars; a reversal older than this is sold
 FALLBACK_FROM = 900      # bar from which the fallback may arm
@@ -122,6 +130,7 @@ class Series:
         self.peak = None       # best close since the position was seen held
         self.entry_ref = None  # average cost price (raw units) of the position
         self.held_bars = 0     # batches seen while the position is held
+        self.arm_bar = None    # bar count when the profit trail armed
         self.traded = False    # a position has been held at some point
 
 
@@ -183,10 +192,14 @@ def on_batch(state, batch):
                 s.held_bars += 1
                 if close > s.peak:
                     s.peak = close
+                if (s.arm_bar is None and s.entry_ref is not None
+                        and s.peak >= s.entry_ref * (1.0 + TRAIL_ARM)):
+                    s.arm_bar = len(s.closes) - 1
         else:
             s.entry_ref = None
             s.peak = None
             s.held_bars = 0
+            s.arm_bar = None
 
         if state.warming_up:
             continue
@@ -198,6 +211,8 @@ def on_batch(state, batch):
             if (s.entry_ref is not None and s.peak is not None
                     and s.peak >= s.entry_ref * (1.0 + TRAIL_ARM)
                     and close <= s.peak * (1.0 - TRAIL_PCT)):
+                exit_now = True
+            if s.arm_bar is not None and len(s.closes) - 1 - s.arm_bar >= ARM_T:
                 exit_now = True
             if s.entry_ref is not None and close <= s.entry_ref * (1.0 - STOP_PCT):
                 exit_now = True
