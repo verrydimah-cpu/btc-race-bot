@@ -18,10 +18,10 @@ single pattern with room to pay for itself, and otherwise holds cash.
    its peak to its lowest low. A routine 1.2% pullback off a local
    chop high does not qualify - this is what keeps post-rally bull
    flags out.
-3. **Base.** At least 90 bars must pass after the washout begins, so
+3. **Base.** At least 60 bars must pass after the washout begins, so
    the entry is never the first bounce off a falling knife.
 4. **Turn (the entry).** The close breaks the highest high of the
-   last 30 bars, the trailing hour is up at least 0.20%, and the
+   last 10 bars, the trailing hour is up at least 0.10%, and the
    close is still within 1.5% of the 480-bar low - the turn out of
    the base, not a chase after the recovery has already run.
 
@@ -30,17 +30,20 @@ single pattern with room to pay for itself, and otherwise holds cash.
 - **Structure break:** the close falls under the lowest low of the
   last 120 bars.
 - **Hard stop:** 1.2% under the position's average cost.
-- **Profit trail:** once the best close since entry is at least 0.8%
+- **Profit trail:** once the best close since entry is at least 1.6%
   above the entry, a close 0.25% under that peak sells. (A plain ATR
   trailing stop was tried first and strangled every trade in 1-minute
-  noise; the trail only exists to protect a real gain.)
+  noise; the trail only exists to protect a real gain, and it arms
+  late on purpose - the first bounce inside a base routinely runs a
+  percent or so and dips again, and a trail armed on that bounce
+  shakes the position out before the real turn.)
 - **Time stop:** 600 bars. After any exit the bot disarms and needs
   a fresh washout.
 
 ## Sizing
 
 Volatility-scaled: the notional is the share of equity that puts the
-per-bar ATR (Wilder, 14) at a 0.08% target, floored at 35% and capped
+per-bar ATR (Wilder, 14) at a 0.12% target, floored at 35% and capped
 at 100% of equity (and by the harness's weight room and cash). Quiet
 trends get full size; wild ones get less. Every order carries
 `max_slippage_bps = 300`, far above the ~13 bps a full-size fill
@@ -51,15 +54,15 @@ moves, so fills are not rejected for slippage in normal conditions.
 A racing entry needs at least one trade to meet the ranking bar. If
 no washout trade has filled by bar 900 and the window's only pattern
 was strength instead - trailing 480-bar return at or above +0.5%
-with a fresh 30-bar high - the bot takes one small trend position
+with a fresh 10-bar high - the bot takes one small trend position
 (at most 25% of equity, same exits). The washout module always has
 priority; on any window where it traded, the fallback never fires.
 
 ## Dev-window result (local grade, exact harness fill model)
 
-- Full 1,440 bars: **net PnL +12.50 USDC (+1.25%)**, 1 round trip
-  (2 filled orders), maximum drawdown 0.74%.
-- First half alone: +12.50 USDC (the same trade).
+- Full 1,440 bars: **net PnL +16.48 USDC (+1.65%)**, 1 round trip
+  (2 filled orders), maximum drawdown 0.65%.
+- First half alone: +16.48 USDC (the same trade).
 - Second half alone: no trade, 0.00 USDC. That half is a slow bleed
   with no capitulation-and-base in it; every active variant tested
   lost money there, so the bot deliberately stays in cash. The dev
@@ -86,14 +89,50 @@ keeps the dev PnL above the v1 result, so the pair sits on the
 same kind of plateau as the rest of the design rather than on a
 knife-edge fit.
 
+## v3 tuning (five parameters, validated)
+
+A later pass asked whether the same washout event could be read
+earlier and ridden more patiently. Five parameters changed, all in
+the turn/exit/sizing layer - the arm, depth check and base band
+that define the event itself are untouched:
+
+- `TURN_N` 30 -> 10 and `MOM_MIN` 0.002 -> 0.001, `BASE_AGE` 90 ->
+  60: the entry takes the first convincing turn out of the base
+  (a 10-bar high break on a rising hour) instead of waiting for a
+  mature 30-bar breakout. On the dev window this fills about 0.3%
+  cheaper, near the base rather than halfway up the recovery.
+- `TRAIL_ARM` 0.008 -> 0.016: the necessary counterpart. An earlier
+  entry meets the base's interim bounce (about +1% on dev) before
+  the real turn, and a trail armed at 0.8% is shaken out by the
+  dip that follows it (that combination scores only about +5 to
+  +7). Arming at 1.6% ignores the bounce and keeps the trade for
+  the full move; anywhere in 1.4%-1.8% gives the identical dev
+  result, so the value sits mid-plateau.
+- `VOL_TARGET` 0.0008 -> 0.0012: at the earlier entry the tape is
+  still slightly more volatile, and the old target scaled the
+  position to about 94% of equity; the new one restores the full
+  size the pattern is meant to take.
+
+Dev result moves from +12.50 USDC / 0.74% max drawdown (v2) to
+**+16.48 USDC / 0.65%** (v3), the same single round trip, entered
+earlier and exited at the same fill as v2. Perturbing each changed
+parameter by ±20% one at a time keeps the dev PnL above the v2
+result (worst case: `BASE_AGE` +20% at +12.96); stacking the three
+adverse perturbations at once degenerates the entry back to
+exactly the v2 trade (+12.50). The honest caveat: the earlier
+turn is a more aggressive reading of the same event, so on an
+unseen window it will also fire on some weaker bases that v2
+would have skipped - the 1.2% hard stop and the depth gate are
+what bound that cost, at about 1.5% of equity per failed trade.
+
 ## Why this should travel to an unseen window
 
-The parameters are few and sit on plateaus: moving any single one of
-the washout depth, breakout lookback, momentum gate or depth check
-by ±20% leaves the dev result unchanged or nearly so (the two v2
-parameters included - see the tuning note above), because the
-gates describe an event (a real capitulation that based and turned),
-not a tuned curve fit. On a window that trends up from the open the
+The parameters sit on plateaus rather than spikes: moving any
+single parameter of the design by ±20% leaves the dev result
+unchanged or keeps it above the previous version's result (the
+v2 and v3 tuning notes above give the numbers), because the
+gates describe an event (a real capitulation that based and
+turned), not a tuned curve fit. On a window that trends up from the open the
 bot makes its one fallback trade; on a window that falls and keeps
 falling it stays in cash at 0 rather than bleeding costs - it can
 only lose meaningfully if a textbook washout base turns out to be a

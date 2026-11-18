@@ -20,7 +20,11 @@ a capitulation that has stopped falling and turned.
     (the base/trend structure is gone), a hard stop STOP_PCT under
     the entry, a profit trail that arms only after a real gain (peak
     TRAIL_ARM above the entry, then out TRAIL_PCT under the peak), or
-    a time stop. After any exit the bot disarms: a fresh washout must
+    a time stop. TRAIL_ARM is deliberately high (v3): the first
+    bounce inside a base routinely runs a percent or so and then
+    dips again, and a trail armed on that bounce shakes the position
+    out before the real turn; arming only once the reversal has
+    proven itself keeps the trade on for the move that pays. After any exit the bot disarms: a fresh washout must
     arm it again.
 
 Position size scales down as volatility rises (ATR / close). Outside
@@ -54,16 +58,16 @@ WASH_L = 480             # lookback for the washout peak (partial early on)
 WASH_MIN = -0.012        # close this far under the WASH_L high arms the bot
 RECOVER = 0.003          # arm ends when the close recovers to the peak
 DEPTH_MIN = 0.018        # the episode must fall this far peak to trough
-BASE_AGE = 90            # bars the base must form before an entry counts
-TURN_N = 30              # breakout lookback for the turn out of the base
+BASE_AGE = 60            # bars the base must form before an entry counts (v3: was 90)
+TURN_N = 10              # breakout lookback for the turn out of the base (v3: was 30)
 MOM_L = 60               # momentum gate lookback at the entry
-MOM_MIN = 0.002          # trailing hour up at least this much (v2: was 0.0025)
+MOM_MIN = 0.001          # trailing hour up at least this much (v3: was 0.002, v1 0.0025)
 BASE_BAND = 0.015        # enter only within 1.5% of the WASH_L-bar low
 EXIT_L = 120             # structure-break lookback while held
 ADX_PERIOD = 14          # (ATR comes from the same Wilder engine)
-VOL_TARGET = 0.0008      # per-bar ATR/close the sizing aims at
+VOL_TARGET = 0.0012      # per-bar ATR/close the sizing aims at (v3: was 0.0008)
 MIN_FRAC = 0.35          # never size below this share of equity
-TRAIL_ARM = 0.008        # profit trail arms this far above the entry
+TRAIL_ARM = 0.016        # profit trail arms this far above the entry (v3: was 0.008)
 TRAIL_PCT = 0.0025       # exits this far under the peak close (v2: was 0.004)
 STOP_PCT = 0.012         # hard stop: 1.2% under the entry price
 TIME_STOP = 600          # bars; a reversal older than this is sold
